@@ -2,6 +2,9 @@ import bcrypt
 import dbm
 import os
 from datetime import datetime
+from re import match
+
+from sqlalchemy.sql.expression import true
 from jupyterhub.auth import Authenticator
 from pathlib import Path
 
@@ -19,6 +22,11 @@ from .orm import UserInfo
 class NativeAuthenticator(Authenticator):
 
     COMMON_PASSWORDS = None
+    strict_student_username = Bool(
+        config=True,
+        default=False,
+        help="Check if new username match pattern 'st'+7 digit student number, eg. st1810001"
+    )
     check_common_password = Bool(
         config=True,
         default=False,
@@ -42,6 +50,12 @@ class NativeAuthenticator(Authenticator):
         default=600,
         help=("Configures the number of seconds a user has to wait "
               "after being blocked. Default is 600.")
+    )
+    create_system_user = Bool(
+        config=True,
+        default_value=True,
+        help=("Allows to create and delete Linux user that matches JupyterHub. "
+              "Note that Linux accounts will be created for all users.")
     )
     enable_signup = Bool(
         config=True,
@@ -218,11 +232,22 @@ class NativeAuthenticator(Authenticator):
         except AssertionError:
             return
 
+        if self.create_system_user:
+            res = os.system(f'useradd -g jupyterhub -m -N -s bash {username}')
+            res = res | os.system(f'echo "{str(pw)}" | passwd --stdin {username}')
+            if res:
+                return 
+
         self.db.add(user_info)
         self.db.commit()
         return user_info
 
     def change_password(self, username, new_password):
+        if not self.is_password_strong(new_password):
+            raise ValueError
+        if self.create_system_user:
+            if os.system(f'echo "{str(new_password)}" | passwd --stdin {username}'):
+                raise ValueError
         user = self.get_user(username)
         user.password = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt())
         self.db.commit()
@@ -231,6 +256,9 @@ class NativeAuthenticator(Authenticator):
         invalid_chars = [',', ' ']
         if any((char in username) for char in invalid_chars):
             return False
+        if self.strict_student_username:
+            if not match(r'st[0-9]{7,}', username):
+                return False
         return super().validate_username(username)
 
     def get_handlers(self, app):
@@ -250,6 +278,9 @@ class NativeAuthenticator(Authenticator):
         if user_info is not None:
             self.db.delete(user_info)
             self.db.commit()
+            if self.create_system_user:
+                if os.system(f'userdel -rf {user.name}'):
+                    raise ValueError
         return super().delete_user(user)
 
     def delete_dbm_db(self):
