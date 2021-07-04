@@ -12,6 +12,8 @@ setup(
     url='https://github.com/jupyterhub/nativeauthenticator',
     author='Leticia Portella',
     author_email='leportella@protonmail.com',
+    maintainer='Alexhaoge',
+    maintainer_email='zlyu@mail.nankai.edu.cn',
     license='3 Clause BSD',
     packages=find_packages(),
     install_requires=['jupyterhub>=1.3', 'bcrypt', 'onetimepass'],

@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', function() {
             {% if enable_signup %}
             <div style="padding-top: 25px;">
                 <p>Don't have an account? <a href="{{ base_url }}signup">Signup!</a></p>
-                <p>Access 10.40.13.202:9500/hub/change-password after login to change password</p>
+                <p>Access {{ base_url }}change-password after login to change password</p>
             </div>
             {% endif %}
         </div>

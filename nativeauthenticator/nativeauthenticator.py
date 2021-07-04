@@ -25,7 +25,7 @@ class NativeAuthenticator(Authenticator):
     strict_student_username = Bool(
         config=True,
         default=False,
-        help="Check if new username match pattern 'st'+7 digit student number, eg. st1810001"
+        help="Check if username match pattern 'st'+7 digit student number, eg. st1810001"
     )
     check_common_password = Bool(
         config=True,
@@ -233,7 +233,7 @@ class NativeAuthenticator(Authenticator):
             return
 
         if self.create_system_user:
-            res = os.system(f'useradd -g jupyterhub -m -N -s bash {username}')
+            res = os.system(f'useradd -g jupyterhub -m -N -s /bin/bash {username}')
             res = res | os.system(f'echo "{str(pw)}" | passwd --stdin {username}')
             if res:
                 return 
@@ -257,7 +257,9 @@ class NativeAuthenticator(Authenticator):
         if any((char in username) for char in invalid_chars):
             return False
         if self.strict_student_username:
-            if not match(r'st[0-9]{7,}', username):
+            if username in self.admin_users or username in self.allowed_users:
+                return True
+            elif not match(r'st[0-9]{7,}', username):
                 return False
         return super().validate_username(username)
 
