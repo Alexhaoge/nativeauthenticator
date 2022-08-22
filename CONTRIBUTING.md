@@ -12,44 +12,46 @@ for a friendly and welcoming collaborative environment.
 
 First install [JupyterHub](https://github.com/jupyterhub/jupyterhub). Then you can install de development requirements for Native Authenticator:
 
-```
-$ pip install -f dev-requirements.txt 
+```shell
+pip install -r dev-requirements.txt
 ```
 
 And then installing Native Authenticator from master branch:
 
+```shell
+pip install -e .
 ```
-$ pip install -e .
+
+### Configure pre-commit
+
+[`pre-commit`](https://pre-commit.com/) is a tool we use to validate code and
+autoformat it. The kind of validation and auto formatting can be inspected via
+the `.pre-commit-config.yaml` file.
+
+As the name implies, `pre-commit` can be configured to run its validation and
+auto formatting just before you make a commit. By configuring it to do so, you
+can avoid having to have a separate commit later that applies auto formatting.
+
+To configure `pre-commit` to run act before you commit, you can run the
+following command from the root of this repository next to the
+`.pre-commit-config.yaml` file.
+
+```shell
+pre-commit install
 ```
 
 ### Running your local project
 
-For developing the Native Authenticator, you should create a `jupyterhub_config.py` file that has at least 3 things: a simple spawner, the NativeAuth as the default authenticator and at least one username to login as an admin. Example:
+For developing the Native Authenticator, you can start a JupyterHub server using `dev-jupyterhub_config.py`.
 
-
-```python
-# jupyter_config.py
-
-c.JupyterHub.spawner_class = 'simplespawner.SimpleLocalProcessSpawner'
-c.JupyterHub.authenticator_class = 'nativeauthenticator.NativeAuthenticator'
-c.Authenticator.admin_users = {'admin'}
-```
-
-The SimpleLocalProcessSpawner makes it easier to develop the authenticator locally without major configurations but *it should not be used in production*.
-
-Then you can run locally by using:
-
-```
-jupyterhub -f ~/jupyterhub_config.py
+```shell
+jupyterhub -f dev-jupyterhub_config.py
 ```
 
 ### Runing tests
 
 On the project folder you can run tests by using pytest
 
+```shell
+pytest
 ```
-$ pytest
-```
-
-
-
