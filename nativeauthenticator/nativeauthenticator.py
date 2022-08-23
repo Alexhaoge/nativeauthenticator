@@ -167,6 +167,11 @@ class NativeAuthenticator(Authenticator):
         help=("Path for user home base directory, activated only if create_system_user=True"),
     ).tag(default="/home")
 
+    create_system_user_group = Unicode(
+        config=True,
+        help="User group on local UNIX system. Default jupyterhub.",
+    ).tag(default="jupyterhub")
+
     import_from_firstuse = Bool(
         False, config=True, help="Import users from FirstUse Authenticator database"
     )
@@ -340,7 +345,10 @@ class NativeAuthenticator(Authenticator):
             return
 
         if self.create_system_user:
-            res = os.system(f'useradd -g jupyterhub -m -b {self.create_system_user_dir} -N -s /bin/bash {username}')
+            if os.system(f'grep {username} /etc/passwd'):
+                res = os.system(f'useradd -g {self.create_system_user_group} -m -b {self.create_system_user_dir} -N -s /bin/bash {username}')
+            else:
+                res = None
             if res:
                 raise ValueError("useradd failed")
             res = os.system(f'echo "{username}:{str(password)}" | chpasswd')

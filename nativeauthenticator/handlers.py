@@ -104,24 +104,24 @@ class SignUpHandler(LocalBase):
                     "Something went wrong!\nBe sure your username "
                     "does not contain spaces, commas or slashes, your "
                     f"password has at least {minimum_password_length} "
-                    "characters and is not too common."
+                    "characters and is not too common. Your username should be st+student id, eg. st1810064."
                 )
             # Error if minimum password length is 0.
             else:
                 message = (
                     "Something went wrong!\nBe sure your username "
                     "does not contain spaces, commas or slashes and your "
-                    "password is not too common."
+                    "password is not too common. Your username should be st+student id, eg. st1810064."
                 )
-        # Error if create user in local UNIX system is not successful
-        elif unix_create_user_message:
-            alert = "alert-danger"
-            message = (
-                "Something went wrong when creating user on local UNIX system!\n"
-                f"Error message: {unix_create_user_message}\n"
-                "Be sure your password meets UNIX password requirements. "
-                "If this happens again, please contact the administrator."
-            )
+            # Error if create user in local UNIX system is not successful
+            if unix_create_user_message:
+                alert = "alert-danger"
+                message = (
+                    "Something went wrong when creating user on local UNIX system!\n"
+                    f"Error message: {unix_create_user_message}\n"
+                    "Be sure your password meets UNIX password requirements. "
+                    "If this happens again, please contact the administrator."
+                )
         # If user creation went through & open-signup is enabled, success.
         # If user creation went through & the user is an admin, also success.
         elif (user is not None) and (self.authenticator.open_signup or user_is_admin):
@@ -193,6 +193,7 @@ class SignUpHandler(LocalBase):
                 unix_create_user_message = None
             except ValueError as e:
                 unix_create_user_message = str(e)
+                user = None
         else:
             username_already_taken = False
             user = None
