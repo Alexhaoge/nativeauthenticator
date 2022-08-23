@@ -10,7 +10,7 @@ setup(
     description="JupyterHub Native Authenticator",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/jupyterhub/nativeauthenticator",
+    url="https://github.com/Alexhaoge/nativeauthenticator",
     author="Leticia Portella",
     author_email="leportella@protonmail.com",
     license="3 Clause BSD",

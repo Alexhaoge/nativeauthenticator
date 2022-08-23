@@ -1,3 +1,4 @@
+from nis import cat
 import os
 from datetime import date
 from datetime import datetime
@@ -72,6 +73,7 @@ class SignUpHandler(LocalBase):
         username_already_taken,
         confirmation_matches,
         user_is_admin,
+        unix_create_user_message
     ):
         """Helper function to discern exactly what message and alert level are
         appropriate to display as a response. Called from post() below."""
@@ -111,6 +113,15 @@ class SignUpHandler(LocalBase):
                     "does not contain spaces, commas or slashes and your "
                     "password is not too common."
                 )
+        # Error if create user in local UNIX system is not successful
+        elif unix_create_user_message:
+            alert = "alert-danger"
+            message = (
+                "Something went wrong when creating user on local UNIX system!\n"
+                f"Error message: {unix_create_user_message}\n"
+                "Be sure your password meets UNIX password requirements. "
+                "If this happens again, please contact the administrator."
+            )
         # If user creation went through & open-signup is enabled, success.
         # If user creation went through & the user is an admin, also success.
         elif (user is not None) and (self.authenticator.open_signup or user_is_admin):
@@ -177,7 +188,11 @@ class SignUpHandler(LocalBase):
             username_already_taken = self.authenticator.user_exists(
                 user_info["username"]
             )
-            user = self.authenticator.create_user(**user_info)
+            try:
+                user = self.authenticator.create_user(**user_info)
+                unix_create_user_message = None
+            except ValueError as e:
+                unix_create_user_message = str(e)
         else:
             username_already_taken = False
             user = None
@@ -197,6 +212,7 @@ class SignUpHandler(LocalBase):
             username_already_taken,
             confirmation_matches,
             user_is_admin,
+            unix_create_user_message
         )
 
         otp_secret, user_2fa = "", ""
@@ -361,27 +377,32 @@ class ChangePasswordHandler(LocalBase):
                 "Your new password didn't match the confirmation. Please try again."
             )
         else:
-            success = self.authenticator.change_password(user.name, new_password)
-            if success:
-                alert = "alert-success"
-                message = "Your password has been changed successfully!"
-            else:
-                alert = "alert-danger"
-                minimum_password_length = self.authenticator.minimum_password_length
-                # Error if minimum password length is > 0.
-                if minimum_password_length > 0:
-                    message = (
-                        "Something went wrong!\n"
-                        "Be sure your new password has at least"
-                        f" {minimum_password_length} characters "
-                        "and is not too common."
-                    )
-                # Error if minimum password length is 0.
+            try:
+                success = self.authenticator.change_password(user.name, new_password)
+                if success:
+                    alert = "alert-success"
+                    message = "Your password has been changed successfully!"
                 else:
-                    message = (
-                        "Something went wrong!\n"
-                        "Be sure your new password is not too common."
-                    )
+                    alert = "alert-danger"
+                    minimum_password_length = self.authenticator.minimum_password_length
+                    # Error if minimum password length is > 0.
+                    if minimum_password_length > 0:
+                        message = (
+                            "Something went wrong!\n"
+                            "Be sure your new password has at least"
+                            f" {minimum_password_length} characters "
+                            "and is not too common."
+                        )
+                    # Error if minimum password length is 0.
+                    else:
+                        message = (
+                            "Something went wrong!\n"
+                            "Be sure your new password is not too common."
+                        )
+            except ValueError:
+                alert = "alert-danger"
+                message = "Encounter local UNIX system error when changing the password. \
+                            Please check if your password meets UNIX system password requirement."
 
         html = await self.render_template(
             "change-password.html",
@@ -426,26 +447,31 @@ class ChangePasswordAdminHandler(LocalBase):
                 "The new password didn't match the confirmation. Please try again."
             )
         else:
-            success = self.authenticator.change_password(user_name, new_password)
-            if success:
-                alert = "alert-success"
-                message = f"The password for {user_name} has been changed successfully"
-            else:
-                alert = "alert-danger"
-                minimum_password_length = self.authenticator.minimum_password_length
-                # Error if minimum password length is > 0.
-                if minimum_password_length > 0:
-                    message = (
-                        "Something went wrong!\nBe sure the new password "
-                        f"for {user_name} has at least {minimum_password_length} "
-                        "characters and is not too common."
-                    )
-                # Error if minimum password length is 0.
+            try:
+                success = self.authenticator.change_password(user_name, new_password)
+                if success:
+                    alert = "alert-success"
+                    message = f"The password for {user_name} has been changed successfully"
                 else:
-                    message = (
-                        "Something went wrong!\nBe sure the new password "
-                        f"for {user_name} is not too common."
-                    )
+                    alert = "alert-danger"
+                    minimum_password_length = self.authenticator.minimum_password_length
+                    # Error if minimum password length is > 0.
+                    if minimum_password_length > 0:
+                        message = (
+                            "Something went wrong!\nBe sure the new password "
+                            f"for {user_name} has at least {minimum_password_length} "
+                            "characters and is not too common."
+                        )
+                    # Error if minimum password length is 0.
+                    else:
+                        message = (
+                            "Something went wrong!\nBe sure the new password "
+                            f"for {user_name} is not too common."
+                        )
+            except ValueError:
+                alert = "alert-danger"
+                message = "Encounter local UNIX system error when changing the password. \
+                            Please check if your password meets UNIX system password requirement."
 
         html = await self.render_template(
             "change-password-admin.html",
@@ -525,7 +551,15 @@ class DiscardHandler(LocalBase):
             if not user.is_authorized:
                 # Delete user from NativeAuthenticator db table (users_info)
                 user = type("User", (), {"name": user_name})
-                self.authenticator.delete_user(user)
+                try:
+                    self.authenticator.delete_user(user)
+                except ValueError:
+                    html = await self.render_template(
+                        'autorization-area.html',
+                        ask_email=self.authenticator.ask_email_on_signup,
+                        users=self.db.query(UserInfo).all(),
+                        error=f'Unable to delete {user_name}: Encounter error when deleting user from local UNIX system.'
+                    )
 
                 # Also delete user from jupyterhub registry, if present
                 if self.users.get(user_name) is not None:

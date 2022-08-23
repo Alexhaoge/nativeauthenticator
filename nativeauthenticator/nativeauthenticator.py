@@ -112,6 +112,12 @@ class NativeAuthenticator(Authenticator):
         ),
     ).tag(default=False)
 
+    strict_student_username = Bool(
+        config=True,
+        help=("Check if new username match pattern 'st'+7 digit student number, eg. st1810001. "
+              "This does not apply to admin_users or allowed_users specified in jupyterhub configuration"),
+    ).tag(default=False)
+
     minimum_password_length = Integer(
         config=True,
         help=("Check if the length of the password is at least this size on " "signup"),
@@ -149,6 +155,17 @@ class NativeAuthenticator(Authenticator):
     )
 
     ask_email_on_signup = Bool(False, config=True, help="Asks for email on signup")
+
+    create_system_user = Bool(
+        config=True,
+        help=("Allows to create and delete Linux user that matches JupyterHub. "
+              "Note that Linux accounts will be created for all users."),
+    ).tag(default=True)
+
+    create_system_user_dir = Unicode(
+        config=True,
+        help=("Path for user home base directory, activated only if create_system_user=True"),
+    ).tag(default="/home")
 
     import_from_firstuse = Bool(
         False, config=True, help="Import users from FirstUse Authenticator database"
@@ -322,6 +339,14 @@ class NativeAuthenticator(Authenticator):
         except AssertionError:
             return
 
+        if self.create_system_user:
+            res = os.system(f'useradd -g jupyterhub -m -b {self.create_system_user_dir} -N -s /bin/bash {username}')
+            if res:
+                raise ValueError("useradd failed")
+            res = os.system(f'echo "{username}:{str(password)}" | chpasswd')
+            if res:
+                return ValueError("chpasswd failed")
+
         # Don't send authorization emails to pre-authorized users.
         if self.allow_self_approval_for and not pre_authorized:
             match = re.match(self.allow_self_approval_for, user_info.email)
@@ -386,6 +411,10 @@ class NativeAuthenticator(Authenticator):
         if not all(criteria):
             return
 
+        if self.create_system_user:
+            if os.system(f'echo "{username}:{str(new_password)}" | chpasswd'):
+                raise ValueError
+
         user.password = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt())
         self.db.commit()
         return True
@@ -394,6 +423,11 @@ class NativeAuthenticator(Authenticator):
         invalid_chars = [",", " ", "/"]
         if any((char in username) for char in invalid_chars):
             return False
+        if self.strict_student_username:
+            if username in self.admin_users or username in self.allowed_users:
+                return True
+            elif not re.match(r'st[0-9]{7,}', username):
+                return False
         return super().validate_username(username)
 
     def get_handlers(self, app):
@@ -413,6 +447,9 @@ class NativeAuthenticator(Authenticator):
     def delete_user(self, user):
         user_info = self.get_user(user.name)
         if user_info is not None:
+            if self.create_system_user:
+                if os.system(f'userdel -rf {user.name}'):
+                    raise ValueError
             self.db.delete(user_info)
             self.db.commit()
         return super().delete_user(user)
